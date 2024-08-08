@@ -162,7 +162,7 @@ def _readNodesandElements(ModelName):
 	eleName = 'Elements'
 	eleClassName = 'EleClassTags'
 	delim = ' '
-	dtype ='float32' 
+	dtype ='float64' 
 	ftype = '.out'
         
 	ODBdir = ModelName+"_ODB"		# ODB Dir name
@@ -283,7 +283,7 @@ def _readModeShapeData(ModelName,modeNumber):
 	modeName = "ModeShape"
 	delim = ' '
 	fmt = '%.10e'
-	dtype ='float32'
+	dtype ='float64'
 	ftype = '.out'
         
 	ODBdir = ModelName+"_ODB"		# ODB Dir name
@@ -361,7 +361,7 @@ def _readFiberData2D(ModelName, LoadCaseName, eleNumber, sectionNumber):
 	FibreName = "FiberData"
 	delim = ' '
 	# fmt = '%.10e'
-	dtype ='float32'
+	dtype ='float64'
 	ftype = '.out'    
     
 	ODBdir = ModelName+"_ODB"		# ODB Dir name

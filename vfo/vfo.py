@@ -15,6 +15,7 @@
 
 import sys
 import os
+from time import process_time
 import matplotlib
 import math
 
@@ -23,10 +24,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 
+ntbkFlag = 0
+
 for line in range(0,len(sys.argv)):
     if "ipykernel_launcher.py" in sys.argv[line]:
         # matplotlib.use('nbagg')
-        pv.set_jupyter_backend('trame')
+        ntbkFlag = 1
+        pv.set_jupyter_backend('client')
         break
     else:
         pass
@@ -42,7 +46,13 @@ from matplotlib.widgets import Slider
 import vfo.classTags as classTags
 import vfo.internal_database_functions as idbf
 import vfo.internal_plotting_functions as ipltf
+import vfo.section_helper as sh
 import openseespy.opensees as ops
+
+
+basecolors = ['gray','lightblue','lightgreen','blue','magenta','cyan','gold','green','tomato']
+
+
 
 #####################################################################
 ####    All the plotting related definitions start here.
@@ -112,20 +122,34 @@ def createODB(model=None,loadcase=None, Nmodes=0, deltaT=0.0):
 	## Create mode shape dir
 	#########################
 	if Nmodes > 0:
+		# Stop the stopwatch / counter
+		# print("vfo: Calculating modeshape data..")
+		t_start = process_time()
+		
 		ModeShapeDir = os.path.join(ODBdir,"ModeShapes")
 		if not os.path.exists(ModeShapeDir):
 			os.makedirs(ModeShapeDir)
 			
 		## Run eigen analysis internally and get information to print
-		Tarray = np.zeros([1,Nmodes])  # To save all the periods of vibration
+		Tarray = np.zeros([Nmodes,2])  # To save all the periods of vibration
 		ops.wipeAnalysis()
 		eigenVal = ops.eigen(Nmodes+1)
 	
 		for m in range(1,Nmodes+1):
-			Tarray[0,m-1]=4*asin(1.0)/(eigenVal[m-1])**0.5
+			Tarray[m-1,0]= m
+			Tarray[m-1,1]=4*asin(1.0)/(eigenVal[m-1])**0.5
 		
 		modeTFile = os.path.join(ModeShapeDir, "ModalPeriods.out")
-		np.savetxt(modeTFile, Tarray, delimiter = ' ', fmt = '%.5e')   
+		np.savetxt(modeTFile, Tarray, delimiter = ' ', fmt = '%.5e')  
+
+		t_stop = process_time()
+		print("vfo: Calculated modal periods...\n")
+		print("Mode   ","   Period (sec)")
+		print(np.array2string(Tarray).replace('[[',' ').strip('[').strip(']').replace(']\n','\n').replace('[',''))
+		print(" \n")
+		print("************************************************************************\n")
+		print(">>vfo: Time to calculate and save modeshapes (secs) = ", t_stop-t_start, " <<")
+		print("************************************************************************\n")
 		
 		### Save mode shape data
 		for i in range(1,Nmodes+1):
@@ -242,6 +266,8 @@ def readODB(*argv):
 	
 	else:
 		return nodes, elements
+		
+	print("VFO has successfully read the output database")
 
 
 
@@ -268,6 +294,7 @@ def _get_modelDisplay(nodeArray, elementArray, eleClassTags):
     
     def _getNodeIndex(nodeTag):
         nodeIndex, = np.where(nodeTags[:] == int(nodeTag))
+        #print(nodeTag, nodeIndex)
         return int(nodeIndex)
 
     
@@ -286,7 +313,7 @@ def _get_modelDisplay(nodeArray, elementArray, eleClassTags):
     def _getPV_2NodeELements(elementArray):
         lineElements = np.empty(0, dtype=int)  # Initiate line element array
         for ii in elementArray:
-            # print(ii)
+            # print("eleArray= ",ii)
             if len(ii)==3:
                 # print("ok")
                 tempArray = np.array([2, _getNodeIndex(ii[1]), _getNodeIndex(ii[2])])
@@ -482,8 +509,8 @@ def plot_model(model="none",show_nodes="no",show_nodetags="no",show_eletags="no"
 	
 	mesh_original, mesh_lines_original, vertices, nodeTags = _get_modelDisplay(nodeArray, elementArray, eleClassTags)
 
-	pl = pv.Plotter()
-	pl.show(interactive_update=True)
+	pl = pv.Plotter()    # window_size=([700, 500])
+	# pl.show(interactive_update=True)
 	
 	if show_nodes == "yes":
 		point_size = 5.0
@@ -543,7 +570,10 @@ def plot_model(model="none",show_nodes="no",show_nodetags="no",show_eletags="no"
 	if filename is not None:
 		pl.screenshot(filename+".png") 
 		
-	pl.show()
+	if ntbkFlag == 1:
+		pl.show(jupyter_backend='client')
+	else:
+		pl.show()
 
 
 
@@ -627,7 +657,7 @@ def plot_deformedshape(model="none",loadcase="none",scale=10,tstep=-1,overlap="n
 	# print("displacement_nodeArray = ", displacement_nodeArray)
 	
 	pl = pv.Plotter()		
-	pl.show(interactive_update=True)
+	# pl.show(interactive_update=True, jupyter_backend='client')
 
 
 	if tstep == -1:
@@ -727,7 +757,10 @@ def plot_deformedshape(model="none",loadcase="none",scale=10,tstep=-1,overlap="n
 	# if node_tags=="yes":
 		# pl.add_point_labels(vertices, nodeTags, point_size=1,render_points_as_spheres=True, font_size=font_size ,shape_color="white", shape_opacity=0.2, render=True,always_visible=True)
 
-	pl.show()
+	if ntbkFlag == 1:
+		pl.show(jupyter_backend='client')
+	else:
+		pl.show()
 
 
 def plot_modeshape(model="none",modenumber=1,scale=10,overlap="yes",contour="none",setview="3D", line_width=1, contourlimits=None, filename=None):
@@ -796,7 +829,7 @@ def plot_modeshape(model="none",modenumber=1,scale=10,overlap="yes",contour="non
 		Mode_nodeArray = this_Mode_nodeArray
 		
 	pl = pv.Plotter()		
-	pl.show(interactive_update=True)
+	# pl.show(interactive_update=True, jupyter_backend='client')
 	
 	
 	# DeflectedNodeCoordArray = nodeArray[:,1:]+ scale*displacement_nodeArray[jj,:,:]
@@ -861,7 +894,190 @@ def plot_modeshape(model="none",modenumber=1,scale=10,overlap="yes",contour="non
 	point_size = 1
 	#font_size = 10
     
-	pl.show()
+	if ntbkFlag == 1:
+		pl.show(jupyter_backend='client')
+	else:
+		pl.show()
+
+def animate_modeshape(model="none",modenumber=1,scale=10,overlap="yes",contour="none",setview="3D", line_width=1, contourlimits=None, filename=None):
+    
+	"""
+	a function to plot mode shape of model.
+	
+	Command:
+	
+	animate_deformedshape(model="none",loadcase="none",scale=10,speedup=1,overlap="yes",contour="none",setview="3D",line_width=1,node_for_th=None, node_dof=1, moviename=None,gifname=None)
+    	
+	INPUT:
+		model		: (string)
+			Name of the model output database as used in createODB() function. Default is "none".
+			
+		loadcase	: (string)
+			Name of the load case to save output data.
+			
+		scale		: (int)
+			Scale factor to be applied to the deformed shape. Default is 10.
+		
+		contour		: (str)
+			Contours of displacement in x, y, or z. Default is "none".
+			
+		contourlimits: (list)
+			A list of minimum and maximum limits of the displacement contours.
+		
+		setview		: (str)
+			sets the camera view to predefined angles. Valid entries are "xy","yz","xz","3D", or a list with [x,y,z] unit vector. Default is "3D".
+			
+		line_width  : (int)
+			Line thickness for the beam-column elements. Default is 1.
+			
+		moviename	: (str)
+			Filename to save animation as a movie in .mp4 format.
+			
+		gifname	: (str)
+			Filename to save animation as a movie in .gif format.
+		
+	"""
+	modeNumber = modenumber
+	if model == "none":
+		print("No Model_ODB specified to plot modeshapes")
+		ops.wipeAnalysis()
+		eigenVal = ops.eigen(modeNumber+1)
+		Tn=4*asin(1.0)/(eigenVal[modeNumber-1])**0.5
+		this_nodeArray, elementArray, eleClassTags = idbf._getNodesandElements()
+		this_Mode_nodeArray = idbf._getModeShapeData(modeNumber)		# DOES NOT GIVE MODAL PERIOD
+		ops.wipeAnalysis()
+	else:
+		print("Reading modeshape data from "+str(model)+"_ODB")
+		this_nodeArray, elementArray, eleClassTags = idbf._readNodesandElements(model)
+		this_Mode_nodeArray, Periods = idbf._readModeShapeData(model,modeNumber)
+		Tn = Periods[modeNumber-1]
+				
+
+	## Check if the model is 2D or 3D
+	nodeArray = np.zeros([len(this_nodeArray[:,0]), 4])
+	Mode_nodeArray = np.zeros([len(this_Mode_nodeArray[:,0]), 4])
+	ndm = len(this_nodeArray[0,:]) -1
+	if ndm == 2:
+		for ii in range(0,len(this_nodeArray[:,0])):
+			nodeArray[ii,0:3] = this_nodeArray[ii,:]
+		
+		for ii in range(0,len(this_Mode_nodeArray[:,0])):
+			Mode_nodeArray[ii,0:3] = this_Mode_nodeArray[ii,:]
+	else:
+		nodeArray = this_nodeArray
+		Mode_nodeArray = this_Mode_nodeArray
+		
+
+	pl = pv.Plotter(window_size=[960, 528])
+	pl.show(interactive_update=True)
+	# pl.show(auto_close=False)
+	
+	if moviename is not None:
+		pl.open_movie(moviename+".mp4")
+		# pl.write_frame()
+		
+	if gifname is not None:
+		pl.open_gif(gifname+".gif")
+	
+	# mesh_original, vertices, nodeTags = _get_modelDisplay(nodeArray, elementArray, eleClassTags)
+	mesh_original, mesh_lines_original, vertices, nodeTags = _get_modelDisplay(nodeArray, elementArray, eleClassTags)
+
+	
+	point_size = 0.0
+	spheres=False
+	
+	# Add original mesh to set the view first
+	# thisMesh1 = pl.add_mesh(mesh_original, show_edges=True, color="gray", opacity=0.3, name="thisMesh")  # "show_edges=True" will NOT work with PlotterITK
+	# thisMesh2 = pl.add_mesh(mesh_original, show_edges=True, color="gray", opacity=0.3, name="thisMesh")  # "show_edges=True" will NOT work with PlotterITK
+	
+	thisMesh1 = pl.add_mesh(mesh_original, show_edges=True, render_points_as_spheres=spheres, point_size=point_size, color="gray", opacity=0.3, render_lines_as_tubes=False, line_width=1)  # "show_edges=True" will NOT work with PlotterITK
+	thisMesh2 = pl.add_mesh(mesh_lines_original, show_edges=True, render_points_as_spheres=spheres, point_size=point_size, color="gray", opacity=0.3, render_lines_as_tubes=False, line_width=line_width)  # "show_edges=True" will NOT work with PlotterITK
+	
+	
+	text1 = pl.add_text("")
+	
+	# ALTERNATIVELY, USE https://docs.pyvista.org/api/plotting/_autosummary/pyvista.Plotter.view_xy.html
+	
+	if setview in ["XY","xy"]:
+		pl.view_xy()
+	elif setview in ["YZ","yz"]:
+		pl.view_yz()
+	elif setview in ["XZ","xz"]:
+		pl.view_xz()
+	elif setview == "3D":
+		pl.view_isometric()
+		pos=pl.camera.position
+		pl.set_position(pos)
+	else:
+		pl.set_viewup(setview)
+		
+	## Overwrite setview option to "xy" if the model is 2D
+	if ndm == 2:
+		pl.view_xy()
+	else:
+		pass
+		
+	point_size = 1
+		
+	maxDispArray = idbf._getMaxNodeDisp(timeSteps, displacement_nodeArray)
+	# print(maxDispArray)
+	# index_x_max = np.argmax(maxDispArray[:,1])
+	# index_x_min = np.argmax(abs(maxDispArray[:,1]))
+	# index_y_max = np.argmax(maxDispArray[:,3])
+	
+	if contour in ["x","X"]:
+		_thisScalar=0
+		Clim = [0,max(max(maxDispArray[:,1]),max(abs(maxDispArray[:,2])))]
+	elif contour in ["y","Y"]:
+		_thisScalar=1
+		Clim = [0,max(max(maxDispArray[:,3]),max(abs(maxDispArray[:,4])))]
+	elif contour in ["z","Z"]:
+		_thisScalar=2
+		Clim = [0,max(max(maxDispArray[:,5]),max(abs(maxDispArray[:,6])))]
+		
+	
+	jj=0
+	
+	# Animation
+	print("Creating animation gif/movie file. On-screen updating may seem choppy/slow. Please don't close the window.")
+	
+	for jj in range(0,len(timeSteps),math.ceil(speedup)):
+		tstep = timeSteps[jj]
+		DeflectedNodeCoordArray = nodeArray[:,1:]+ scale*displacement_nodeArray[jj,:,:]
+		DeflectedNodeArray = np.hstack((nodeArray[:,0].reshape(len(nodeArray[:,0]),1),DeflectedNodeCoordArray))
+		# print(jj)
+		
+		mesh_deflected, mesh_lines_deflected, vertices, nodeTags = _get_modelDisplay(DeflectedNodeArray, elementArray, eleClassTags)
+		
+		if contour == "none":
+			Scalar = None
+			Clim = None
+		else:
+			Scalar = np.absolute(displacement_nodeArray[jj,:,_thisScalar])
+			
+		# pl.clear()
+		pl.remove_actor(thisMesh1)
+		pl.remove_actor(thisMesh2)
+		pl.remove_actor(text1)
+		# thisMesh = pl.add_mesh(mesh_deflected, show_edges=True, color="green", opacity=1.0, scalars=Scalar, clim=Clim, show_scalar_bar=True)  # "show_edges=True" will NOT work with PlotterITK		
+		thisMesh1=pl.add_mesh(mesh_deflected, show_edges=True, render_points_as_spheres=spheres, point_size=point_size, line_width=1, scalars=Scalar, clim=Clim, opacity=1.0,show_scalar_bar=True,name="thisMesh1")  # "show_edges=True" will NOT work with PlotterITK
+		thisMesh2=pl.add_mesh(mesh_lines_deflected, show_edges=True, render_points_as_spheres=spheres, point_size=point_size, line_width=line_width, scalars=Scalar, clim=Clim, opacity=1.0,name="thisMesh2")  # "show_edges=True" will NOT work with PlotterITK
+	
+	
+		text1 = pl.add_text("Time = "+str(tstep), color="black", font_size=12)
+		pl.add_text('VFO - Visualization for OpenSees', position='lower_left', color='green', font_size=6)
+		
+		try:
+			th_line.update(timeSteps[0:jj,], displacement_nodeArray[0:jj,50,1])
+		except:
+			pass
+		
+		if moviename or gifname is not None:
+			pl.write_frame()
+
+		pl.update()
+			
+	print("Movie/Gif file is saved.")
 
 
 def animate_deformedshape(model="none",loadcase="none",scale=10,speedup=1,overlap="yes",contour="none",setview="3D",line_width=1,node_for_th=None, node_dof=1, moviename=None,gifname=None):
@@ -1078,6 +1294,199 @@ def animate_deformedshape(model="none",loadcase="none",scale=10,speedup=1,overla
 			
 	print("Movie/Gif file is saved.")
 	
+
+
+
+
+def getListIndex(list, val):
+    for ii,a in enumerate(list):
+        if a==val:
+            break
+        else:
+            ii+=1
+    return ii
+
+
+
+def fiberSection(secTag=1,GJ=None,torsionMat=None,fibers=[], display=True, save=True):
+    """
+    Creates a fiber section based on user input. The aim is to track and plot the fiber section input.
+    Inputs: 
+        secTag:  Section tag (Int)
+        GJ    :  linear-elastic torsional stiffness assigned to the section (float)
+        torsionMat : previously defined material tag
+        patches    : List of patches input as lists
+        display    : flag to display or plot the fiber section (bool). Default is True
+        save       : flag to save the section definition to opensees model (bool). Default is true
+
+    """
+
+    fibseclines=[] 
+    fibsecpatch=[]
+    circpatch=[]
+    barpatch = []
+    plotlimits=[[0],[0]]
+    matList=[]
+
+    if save==True:
+        if GJ is not None:
+            ops.section('Fiber', secTag, '-GJ', GJ)
+        elif torsionMat is not None:
+            ops.section('Fiber', secTag, '-torsion', torsionMatTag)
+        else:
+            print("VFO >> No imput for torsional behaviot (GJ or torsionMat) was provided. The section will be displayed but no OpenSees definition will be created.")
+            save=False
+
+    ## Get all the material tags to assign colors
+    for thisfiber in fibers:
+        if thisfiber[0]=="fiber":
+            thisMat = thisfiber[4]
+        else:
+            thisMat = thisfiber[2]
+        
+        if thisMat not in matList:
+            matList.append(thisMat)
+    
+    for thisfiber in fibers:
+        thiscolor = basecolors[getListIndex(matList, thisfiber[2])]
+        
+        if thisfiber[0]=="layer":
+            if thisfiber[1]=="straight":
+                ys = np.linspace(thisfiber[5],thisfiber[7],thisfiber[3])
+                zs = np.linspace(thisfiber[6],thisfiber[8],thisfiber[3])
+
+                plotlimits[0]=plotlimits[0]+[max(ys), min(ys)]  # Add y values to calculate the plot limits
+                plotlimits[1]=plotlimits[1]+[max(zs), min(zs)]
+                
+                ro = np.sqrt(thisfiber[4]/np.pi)
+                
+                for ii in range(0,len(ys)):
+                    _fibseclines, _fibsecpatch, _circpatch, _barpatch=sh.display_mesh_bar([ys[ii],zs[ii]],ro,color=thiscolor)
+                    fibseclines = fibseclines+_fibseclines
+                    fibsecpatch=fibsecpatch+_fibsecpatch
+                    circpatch = circpatch+_circpatch
+                    barpatch = barpatch+_barpatch
+
+                if save is True:
+                    # layer('straight', matTag, numFiber, areaFiber, *start, *end)
+                    ops.layer('straight', thisfiber[2], thisfiber[3], thisfiber[4], thisfiber[5],thisfiber[6],thisfiber[7],thisfiber[8])
+
+            if thisfiber[1]=="circ":
+                try:
+                    arcang = np.linspace(thisfiber[8], thisfiber[9], thisfiber[3])
+                except:
+                    print("VFO >>No start and end angles for circ layer in section "+str(secTag)+" is provided.<<")
+                    print("VFO >>The layer will generate fibers in a full circle.<<")
+                    arcang = np.linspace(0, 360, thisfiber[3]-1)
+                    
+                ri = thisfiber[7]
+                ys = thisfiber[5] + ri*np.cos(arcang*np.pi/180)
+                zs = thisfiber[6] + ri*np.sin(arcang*np.pi/180)
+
+                plotlimits[0]=plotlimits[0]+[max(ys), min(ys)]  # Add y values to calculate the plot limits
+                plotlimits[1]=plotlimits[1]+[max(zs), min(zs)]
+
+                ro = np.sqrt(thisfiber[4]/np.pi)
+                                
+                for ii in range(0,len(ys)):
+                    _fibseclines, _fibsecpatch, _circpatch, _barpatch=sh.display_mesh_bar([ys[ii],zs[ii]],ro,color=thiscolor)
+                    fibseclines = fibseclines+_fibseclines
+                    fibsecpatch=fibsecpatch+_fibsecpatch
+                    circpatch = circpatch+_circpatch
+                    barpatch = barpatch+_barpatch
+
+                if save is True:
+                    # layer('circ', matTag,numFiber,areaFiber,*center,radius,*ang=[0.0,360.0-360/numFiber])
+                    # ['layer', 'circ', 4, 6, As9, 0., 0., rbar3, a_beg2, a_end2],
+                    ops.layer('circ', thisfiber[2], thisfiber[3], thisfiber[4], thisfiber[5],thisfiber[6],thisfiber[7],thisfiber[8],thisfiber[9])
+
+        if thisfiber[0]=="patch":
+            if thisfiber[1]=="quad":
+                plotlimits[0]=plotlimits[0]+[thisfiber[5], thisfiber[7], thisfiber[9], thisfiber[11]]  # Add y values to calculate the plot limits
+                plotlimits[1]=plotlimits[1]+[thisfiber[6], thisfiber[8], thisfiber[10], thisfiber[12]]
+                
+                # sh.display_mesh_quad(a,b,c,d, ny,nz,color='lightgreen')
+                # sh.display_mesh_quad([0,0],[4,0],[3.5,2],[1,2.5], 5,3,color='lightgreen')
+                _fibseclines, _fibsecpatch, _circpatch, _barpatch=sh.display_mesh_quad([thisfiber[5],thisfiber[6]],[thisfiber[7],thisfiber[8]],
+                                                                                    [thisfiber[9],thisfiber[10]],[thisfiber[11],thisfiber[12]],
+                                                                                    thisfiber[3],thisfiber[4],color=thiscolor)
+                fibseclines = fibseclines+_fibseclines
+                fibsecpatch=fibsecpatch+_fibsecpatch
+                circpatch = circpatch+_circpatch
+                barpatch = barpatch+_barpatch
+
+                if save is True:
+                    # patch('quad', matTag, numSubdivIJ, numSubdivJK, *crdsI, *crdsJ, *crdsK, *crdsL)
+                    # ['patch', 'quad', 1, 4, 1,  0.032, 0.317, -0.311, 0.067, -0.266, 0.005, 0.077, 0.254]
+                    ops.patch('quad', thisfiber[2], thisfiber[3], thisfiber[4], thisfiber[5],thisfiber[6],thisfiber[7],thisfiber[8],
+                                                                                  thisfiber[9],thisfiber[10],thisfiber[11],thisfiber[12])
+
+            if thisfiber[1]=="rect":
+                """
+                Utilize display_quad_mesh function for this
+                """
+                plotlimits[0]=plotlimits[0]+[thisfiber[5], thisfiber[7]]  # Add y values to calculate the plot limits
+                plotlimits[1]=plotlimits[1]+[thisfiber[6], thisfiber[8]]
+                
+                # sh.display_mesh_quad(a,b,c,d, ny,nz,color='lightgreen')
+                _fibseclines, _fibsecpatch, _circpatch, _barpatch=sh.display_mesh_quad([thisfiber[5],thisfiber[6]],[thisfiber[7],thisfiber[6]],
+                                                                                    [thisfiber[7],thisfiber[8]],[thisfiber[5],thisfiber[8]],
+                                                                                    thisfiber[3],thisfiber[4],color=thiscolor)
+                fibseclines = fibseclines+_fibseclines
+                fibsecpatch=fibsecpatch+_fibsecpatch
+                circpatch = circpatch+_circpatch
+                barpatch = barpatch+_barpatch
+
+                if save is True:
+                    # patch('rect', matTag, numSubdivY, numSubdivZ, *crdsI, *crdsJ)
+                    # ['patch', 'rect', 2, nFibCore, nFibZ, c-y1col, c-z1col, y1col-c, z1col-c]
+                    ops.patch('rect', thisfiber[2], thisfiber[3], thisfiber[4], thisfiber[5],thisfiber[6],thisfiber[7],thisfiber[8])
+
+            if thisfiber[1]=="circ":
+                plotlimits[0]=plotlimits[0]+[thisfiber[5], thisfiber[7]]  # Add y values to calculate the plot limits
+                plotlimits[1]=plotlimits[1]+[thisfiber[6], thisfiber[8]]
+                
+                #sh.display_mesh_circ(c,ri,ro, start_angle,end_angle, na,nr,color='lightgreen')
+                _fibseclines, _fibsecpatch, _circpatch, _barpatch=sh.display_mesh_circ([thisfiber[5], thisfiber[6]],thisfiber[7], thisfiber[8],
+                                                                                    thisfiber[9], thisfiber[10], thisfiber[3], thisfiber[4],color=thiscolor)
+                
+                fibseclines = fibseclines+_fibseclines
+                fibsecpatch=fibsecpatch+_fibsecpatch
+                circpatch = circpatch+_circpatch
+                barpatch = barpatch+_barpatch
+
+                if save is True:
+                    # patch('circ', matTag, numSubdivCirc, numSubdivRad, *center, *rad, *ang)
+                    # ['patch', 'circ', 2, nc1, nr1, 0., 0., ri1, re1, a_beg, a_end],
+                    ops.patch('circ', thisfiber[2], thisfiber[3], thisfiber[4], thisfiber[5],thisfiber[6],thisfiber[7],thisfiber[8],thisfiber[9],thisfiber[10])
+
+        if thisfiber[0]=="fiber":
+            """
+            fiber(yloc, zloc, A, matTag)
+            """
+            ro = np.sqrt(thisfiber[3]/np.pi)
+            
+            _fibseclines, _fibsecpatch, _circpatch, _barpatch=sh.display_mesh_bar([thisfiber[1],thisfiber[2]],thisfiber[3],color=thiscolor)
+            fibseclines = fibseclines+_fibseclines
+            fibsecpatch=fibsecpatch+_fibsecpatch
+            circpatch = circpatch+_circpatch
+            barpatch = barpatch+_barpatch
+
+            if save is True:
+                # fiber(yloc, zloc, A, matTag)
+                ops.fiber(thisfiber[1], thisfiber[2], thisfiber[3], thisfiber[4])
+
+
+    if display == True:
+        fig, ax=sh._fibersectionplot(fibseclines, fibsecpatch, circpatch, barpatch)
+        plt.show()
+
+
+
+
+
+
+
 
 
 def saveFiberData2D(ModelName, LoadCaseName, eleNumber, sectionNumber = 1, deltaT = 0.0, ZLE = False):
