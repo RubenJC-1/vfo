@@ -8,13 +8,13 @@ message: >-
   please support the work by citing it using the
   metadata in this file.
 repository-code: "https://github.com/u-anurag/vfo"
-version: 0.0.5
+version: 0.0.18
 license: MIT
 type: software
 authors:
   - given-names: Anurag
     family-names: Upadhyay
     email: iitg.anurag@gmail.com
-    affiliation: Magnusson Klemencic Associates
+    affiliation: Tipping Structural Engineers
     orcid: 'https://orcid.org/0000-0001-9525-5062'
-    website: "https://anuragupadhyay.weebly.com/"
+    website: "www.anuragupadhyay.com"
