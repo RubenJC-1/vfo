@@ -94,6 +94,8 @@ def createODB(model=None,loadcase=None, Nmodes=0, deltaT=0.0):
 			of elastic and nonlienar elements, we need to create a method distinguish. 
 	
 	"""
+
+	print("lets do a few edits to check")
 	
 	ModelName = model
 	ODBdir = ModelName+"_ODB"		# ODB Dir name
@@ -1488,9 +1490,6 @@ def animate_fiberResponse2D(Model, LoadCase, element, section, LocalAxis = 'y', 
     
     """
 
-	print("Hello Ruben")
-	print("Hello Ruben2")
-	print("Try this")
     
     # Catch invalid input types
     if InputType not in ['stress', 'strain']:
