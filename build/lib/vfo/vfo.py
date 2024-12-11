@@ -1487,10 +1487,6 @@ def animate_fiberResponse2D(Model, LoadCase, element, section, LocalAxis = 'y', 
 
     
     """
-
-	print("Hello Ruben")
-	print("Hello Ruben2")
-	print("Try this")
     
     # Catch invalid input types
     if InputType not in ['stress', 'strain']:
